@@ -21,7 +21,7 @@ const camera = new Camera();
 const lights = new Lights(camera);
 
 const stats = new Stats();
-stats.showPanel(0);
+stats.showPanel(1);
 document.body.appendChild(stats.dom);
 
 const gui = new GUI();

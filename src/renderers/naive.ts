@@ -1,6 +1,7 @@
 import * as renderer from '../renderer';
 import * as shaders from '../shaders/shaders';
 import { Stage } from '../stage/stage';
+import { GPUTimer } from '../gpu_timer';
 
 export class NaiveRenderer extends renderer.Renderer {
     sceneUniformsBindGroupLayout: GPUBindGroupLayout;
@@ -11,8 +12,12 @@ export class NaiveRenderer extends renderer.Renderer {
 
     pipeline: GPURenderPipeline;
 
+    gpuTimer: GPUTimer;
+
     constructor(stage: Stage) {
         super(stage);
+
+        this.gpuTimer = new GPUTimer();
 
         this.sceneUniformsBindGroupLayout = renderer.device.createBindGroupLayout({
             label: "scene uniforms bind group layout",
@@ -101,8 +106,16 @@ export class NaiveRenderer extends renderer.Renderer {
         const encoder = renderer.device.createCommandEncoder();
         const canvasTextureView = renderer.context.getCurrentTexture().createView();
 
+
+        const measureThisFrame = this.gpuTimer.beginSample();
+
         const renderPass = encoder.beginRenderPass({
             label: "naive render pass",
+            timestampWrites: measureThisFrame ? {
+                querySet: this.gpuTimer.querySet,
+                beginningOfPassWriteIndex: 0,
+                endOfPassWriteIndex: 1
+            } : undefined,
             colorAttachments: [
                 {
                     view: canvasTextureView,
@@ -126,7 +139,7 @@ export class NaiveRenderer extends renderer.Renderer {
         // Bind scene-level camera and light resources before drawing the scene's individual models and materials
         renderPass.setBindGroup(shaders.constants.bindGroup_scene, this.sceneUniformsBindGroup);
 
-        
+
 
         this.scene.iterate(node => {
             renderPass.setBindGroup(shaders.constants.bindGroup_model, node.modelBindGroup);
@@ -140,6 +153,26 @@ export class NaiveRenderer extends renderer.Renderer {
 
         renderPass.end();
 
+        if (measureThisFrame) {
+            this.gpuTimer.resolve(encoder);
+        }
+
+        
+
         renderer.device.queue.submit([encoder.finish()]);
+
+
+
+
+        if (measureThisFrame) {
+            void this.gpuTimer.readMilliseconds().then(milliseconds => {
+                if (milliseconds !== null) {
+                    console.log(`Naive GPU Time: ${milliseconds.toFixed(3)} ms`);
+                }
+            })
+            .catch(error => {
+                console.error("Error reading GPU time:", error);
+            });
+        }
     }
 }
