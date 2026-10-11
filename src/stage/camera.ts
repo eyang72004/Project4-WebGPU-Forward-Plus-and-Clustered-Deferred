@@ -51,6 +51,8 @@ export class Camera {
 
     keys: { [key: string]: boolean } = {};
 
+    benchmarkLocked: boolean = false;
+
     constructor () {
         // TODO-1.1: set `this.uniformsBuffer` to a new buffer of size `this.uniforms.buffer.byteLength`
         // ensure the usage is set to `GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST` since we will be copying to this buffer
@@ -112,12 +114,20 @@ export class Camera {
     }
 
     private onMouseMove(event: MouseEvent) {
+        if (this.benchmarkLocked) {
+            return;
+        }
+        
         if (document.pointerLockElement === canvas) {
             this.rotateCamera(event.movementX * this.sensitivity, event.movementY * this.sensitivity);
         }
     }
 
     private processInput(deltaTime: number) {
+        if (this.benchmarkLocked) {
+            return;
+        }
+        
         let moveDir = vec3.create(0, 0, 0);
         if (this.keys['w']) {
             moveDir = vec3.add(moveDir, this.cameraFront);

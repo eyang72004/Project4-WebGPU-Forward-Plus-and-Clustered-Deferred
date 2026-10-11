@@ -3,6 +3,8 @@ import * as shaders from '../shaders/shaders';
 import { Stage } from '../stage/stage';
 import { GPUTimer } from '../gpu_timer';
 
+import { benchmarkCollector } from '../benchmark';
+
 export class ForwardPlusRenderer extends renderer.Renderer {
     // TODO-2: add layouts, pipelines, textures, etc. needed for Forward+ here
     // you may need extra uniforms such as the camera view matrix and the canvas resolution
@@ -164,6 +166,8 @@ export class ForwardPlusRenderer extends renderer.Renderer {
 
         const measureThisFrame = this.gpuTimer.beginSample();
 
+        const benchmarkSessionId = benchmarkCollector.getSessionId();
+
 
         // Run clustering before main rendering pass
 
@@ -239,7 +243,9 @@ export class ForwardPlusRenderer extends renderer.Renderer {
             void this.gpuTimer.readMilliseconds().then(milliseconds => {
 
                 if (milliseconds !== null) {
-                    console.log(`Forward+ GPU Time: ${milliseconds.toFixed(3)} ms`);
+                    // console.log(`Forward+ GPU Time: ${milliseconds.toFixed(3)} ms`);
+
+                    benchmarkCollector.recordForSession(milliseconds, benchmarkSessionId, 'forward+');
                 }
             })
             .catch(error => {

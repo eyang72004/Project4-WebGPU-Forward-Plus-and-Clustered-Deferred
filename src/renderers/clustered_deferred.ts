@@ -4,6 +4,9 @@ import { Stage } from '../stage/stage';
 
 import { GPUTimer } from '../gpu_timer';
 
+
+import { benchmarkCollector } from '../benchmark';
+
 export class ClusteredDeferredRenderer extends renderer.Renderer {
     // TODO-3: add layouts, pipelines, textures, etc. needed for Forward+ here
     // you may need extra uniforms such as the camera view matrix and the canvas resolution
@@ -345,6 +348,9 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
         const measureThisFrame = this.gpuTimer.beginSample();
 
 
+        const benchmarkSessionId = benchmarkCollector.getSessionId();
+
+
         // Pass 1: Light clustering
 
 
@@ -456,7 +462,9 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
         if (measureThisFrame) {
             void this.gpuTimer.readMilliseconds().then(milliseconds => {
                 if (milliseconds !== null) {
-                    console.log(`Clustered Deferred GPU Time: ${milliseconds.toFixed(3)} ms`);
+                    // console.log(`Clustered Deferred GPU Time: ${milliseconds.toFixed(3)} ms`);
+
+                    benchmarkCollector.recordForSession(milliseconds, benchmarkSessionId, 'clustered deferred');
                 }
             })
             .catch(error => {

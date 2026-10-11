@@ -3,6 +3,8 @@ import * as shaders from '../shaders/shaders';
 import { Stage } from '../stage/stage';
 import { GPUTimer } from '../gpu_timer';
 
+import { benchmarkCollector } from '../benchmark';
+
 export class NaiveRenderer extends renderer.Renderer {
     sceneUniformsBindGroupLayout: GPUBindGroupLayout;
     sceneUniformsBindGroup: GPUBindGroup;
@@ -109,6 +111,8 @@ export class NaiveRenderer extends renderer.Renderer {
 
         const measureThisFrame = this.gpuTimer.beginSample();
 
+        const benchmarkSessionId = benchmarkCollector.getSessionId();
+
         const renderPass = encoder.beginRenderPass({
             label: "naive render pass",
             timestampWrites: measureThisFrame ? {
@@ -167,7 +171,13 @@ export class NaiveRenderer extends renderer.Renderer {
         if (measureThisFrame) {
             void this.gpuTimer.readMilliseconds().then(milliseconds => {
                 if (milliseconds !== null) {
-                    console.log(`Naive GPU Time: ${milliseconds.toFixed(3)} ms`);
+                    // console.log(`Naive GPU Time: ${milliseconds.toFixed(3)} ms`);
+
+                    // if (benchmarkCollector.isActive()) {
+                    //     benchmarkCollector.record(milliseconds);
+                    // }
+
+                    benchmarkCollector.recordForSession(milliseconds, benchmarkSessionId, 'naive');
                 }
             })
             .catch(error => {
