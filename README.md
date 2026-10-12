@@ -16,7 +16,11 @@ https://eyang72004.github.io/Project4-WebGPU-Forward-Plus-and-Clustered-Deferred
 
 ### Demo Video/GIF
 
-I tested all three rendering implementations with 500 moving lights. The GIFs below show the results from the Naive, Forward+, and Clustered Deferred renderers.
+I tested all three rendering implementations with 500 moving lights. The video below shows the Naive, Forward+, and Clustered Deferred renderers in a single recording lasting approximately 58 seconds.
+
+[Full Demonstration Video](img/project4_all_renderers_demo_compressed.mp4)
+
+The GIFs below show each rendering implementation separately.
 
 
 #### Naive Forward Shading
