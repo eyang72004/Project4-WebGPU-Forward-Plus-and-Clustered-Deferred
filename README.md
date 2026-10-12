@@ -10,6 +10,10 @@ WebGPU Forward+ and Clustered Deferred Shading
 
 https://eyang72004.github.io/Project4-WebGPU-Forward-Plus-and-Clustered-Deferred/
 
+### Screenshot
+
+![Naive Forward Shading with 500 lights](img/naive_500_lights.png)
+
 ### Demo Video/GIF
 
 I tested all three rendering implementations with 500 moving lights. The GIFs below show the results from the Naive, Forward+, and Clustered Deferred renderers.
