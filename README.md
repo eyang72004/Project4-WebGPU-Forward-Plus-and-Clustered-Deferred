@@ -8,8 +8,7 @@ WebGPU Forward+ and Clustered Deferred Shading
 
 ### Live Demo
 
-GitHub Pages deployment pending.
-
+https://eyang72004.github.io/Project4-WebGPU-Forward-Plus-and-Clustered-Deferred/
 
 ### Demo Video/GIF
 
@@ -260,8 +259,16 @@ The benchmark files include:
 
 I retained the raw CSV measurements rather than keeping only the final medians. Each selected configuration contains 100 recorded GPU timing samples after the warmup period.
 
-### Credits
 
+### Deployment Notes
+
+I deployed the project through GitHub Pages. To make the production build work, I moved the Sponza scene files into Vite's `public/` directory, updated the scene-loading path to use `import.meta.env.BASE_URL`, and adjusted the build script and GitHub Actions workflow for the repository's deployment path.
+
+I also replaced the original `eval()`-based shader constant substitution with explicit string replacement. The original approach caused shader constants to become `undefined` in the production build, which prevented the renderers from working on GitHub Pages.
+
+I tested the production build locally and verified that all three rendering modes work on the deployed site.
+
+### Credits
 - [Vite](https://vitejs.dev/)
 - [loaders.gl](https://loaders.gl/)
 - [dat.GUI](https://github.com/dataarts/dat.gui)
