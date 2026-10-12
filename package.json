@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --open",
-    "build": "vite build && cp -r scenes/ dist/"
+  "dev": "vite --open",
+  "build": "vite build"
   },
   "devDependencies": {
     "@types/dat.gui": "^0.7.13",

@@ -17,7 +17,7 @@ await initWebGPU();
 setupLoaders();
 
 let scene = new Scene();
-await scene.loadGltf('./scenes/sponza/Sponza.gltf');
+await scene.loadGltf(`${import.meta.env.BASE_URL}scenes/sponza/Sponza.gltf`);
 
 const camera = new Camera();
 const lights = new Lights(camera);
