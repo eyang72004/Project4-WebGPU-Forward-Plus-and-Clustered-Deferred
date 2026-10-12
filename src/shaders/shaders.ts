@@ -44,8 +44,14 @@ export const constants = {
 
 // =================================
 
-function evalShaderRaw(raw: string) {
-    return eval('`' + raw.replaceAll('${', '${constants.') + '`');
+function evalShaderRaw(raw: string): string {
+    return raw.replace(/\$\{([A-Za-z_]\w*)\}/g, (match, name: string) => {
+        if (!Object.prototype.hasOwnProperty.call(constants, name)) {
+            throw new Error(`Unknown shader constant: ${name}`);
+        }
+
+        return String(constants[name as keyof typeof constants]);
+    });
 }
 
 const commonSrc: string = evalShaderRaw(commonRaw);
