@@ -49,3 +49,67 @@ fn calculateLightContrib(light: Light, posWorld: vec3f, nor: vec3f) -> vec3f {
     let lambert = max(dot(nor, normalize(vecToLight)), 0.f);
     return light.color * lambert * rangeAttenuation(distToLight);
 }
+
+
+
+// Extra Credit: octahedral normal encoding for a single-color G-buffer
+
+fn octEncodeNormal(normal: vec3f) -> vec2f {
+    let n = normalize(normal);
+    let projected = n.xy / (abs(n.x) + abs(n.y) + abs(n.z));
+
+
+
+    var encoded = projected;
+
+    if (n.z < 0.0) {
+        encoded = (vec2f(1.0) - abs(projected.yx)) * select(vec2f(-1.0), vec2f(1.0), projected >= vec2f(0.0));
+    }
+
+    return encoded * 0.5 + vec2f(0.5);
+}
+
+
+
+fn octDecodeNormal(encoded: vec2f) -> vec3f {
+    let f = encoded * 2.0 - vec2f(1.0);
+
+
+    var normal = vec3f(
+        f.x,
+        f.y,
+        1.0 - abs(f.x) - abs(f.y)
+    );
+
+    if (normal.z < 0.0) {
+        normal.xy = (vec2f(1.0) - abs(normal.yx)) * select(vec2f(-1.0), vec2f(1.0), normal.xy >= vec2f(0.0));
+    }
+
+
+    return normalize(normal);
+}
+
+
+
+
+fn packNormal(normal: vec3f) -> f32 {
+    let encoded = octEncodeNormal(normal);
+
+    let x = u32(round(clamp(encoded.x, 0.0, 1.0) * 255.0));
+    let y = u32(round(clamp(encoded.y, 0.0, 1.0) * 255.0));
+
+    return f32(x | (y << 8u));
+}
+
+
+
+
+fn unpackNormal(packed: f32) -> vec3f {
+    let bits = u32(round(packed));
+
+
+    let x = f32(bits & 255u) / 255.0;
+    let y = f32((bits >> 8u) & 255u) / 255.0;
+
+    return octDecodeNormal(vec2f(x, y));
+}

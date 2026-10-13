@@ -15,9 +15,9 @@ struct ScreenUniforms {
 
 
 
-@group(1) @binding(0) var albedoTex: texture_2d<f32>;
-@group(1) @binding(1) var normalTex: texture_2d<f32>;
-@group(1) @binding(2) var depthTex: texture_depth_2d;
+// Single-color G-buffer: RGB = albedo, A = packed normal 
+@group(1) @binding(0) var packedBufferTex: texture_2d<f32>;
+@group(1) @binding(1) var depthTex: texture_depth_2d;
 
 
 
@@ -49,8 +49,7 @@ fn main(@builtin(global_invocation_id) globalId: vec3u) {
 
 
 
-    let diffuseColor = textureLoad(albedoTex, pixelCoord, 0);
-    let normalData = textureLoad(normalTex, pixelCoord, 0);
+    let packedData = textureLoad(packedBufferTex, pixelCoord, 0);
     let depth = textureLoad(depthTex, pixelCoord, 0);
 
 
@@ -61,7 +60,7 @@ fn main(@builtin(global_invocation_id) globalId: vec3u) {
         return;
     }
 
-    let nor = normalize(normalData.xyz);
+    let nor = unpackNormal(packedData.a);
 
 
 
@@ -130,6 +129,6 @@ fn main(@builtin(global_invocation_id) globalId: vec3u) {
 
 
 
-    let finalColor = diffuseColor.rgb * totalLightContrib;
+    let finalColor = packedData.rgb * totalLightContrib;
     textureStore(outputTex, pixelCoord, vec4f(finalColor, 1.0));
 }

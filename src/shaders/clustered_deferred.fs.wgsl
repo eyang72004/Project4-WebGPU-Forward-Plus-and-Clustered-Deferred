@@ -22,8 +22,7 @@ struct FragmentInput {
 
 
 struct GBufferOutput {
-    @location(0) albedo: vec4f,
-    @location(1) normal: vec4f
+    @location(0) packedData: vec4f
 }
 
 @fragment
@@ -46,11 +45,13 @@ fn main(in: FragmentInput) -> GBufferOutput {
 
 
 
-    output.albedo = diffuseColor;
-    output.normal = vec4f(normalize(in.nor), 1.0);
+    output.packedData = vec4f(
+        diffuseColor.rgb,
+        packNormal(in.nor)
+    );
 
 
-    
+
 
     return output;
 }

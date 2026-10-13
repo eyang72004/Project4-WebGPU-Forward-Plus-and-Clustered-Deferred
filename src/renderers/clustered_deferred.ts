@@ -32,8 +32,8 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
     albedoTextureView: GPUTextureView;
 
 
-    normalTexture: GPUTexture;
-    normalTextureView: GPUTextureView;
+    // normalTexture: GPUTexture;
+    // normalTextureView: GPUTextureView;
 
 
     depthTexture: GPUTexture;
@@ -88,22 +88,33 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
 
 
 
+        // this.albedoTexture = renderer.device.createTexture({
+        //     label: "G-buffer albedo texture",
+        //     size: [renderer.canvas.width, renderer.canvas.height],
+        //     format: "rgba8unorm",
+        //     usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+        // });
+        // this.albedoTextureView = this.albedoTexture.createView();
+
+        // // World-space normals require a format that supports negative values
+        // this.normalTexture = renderer.device.createTexture({
+        //     label: "G-buffer normals",
+        //     size: [renderer.canvas.width, renderer.canvas.height],
+        //     format: "rgba16float",
+        //     usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+        // });
+        // this.normalTextureView = this.normalTexture.createView();
+
+
+        // Extra Credit: single-color G-buffer
+        // RGB stores albedo; alpha stores octahedrally encoded, 16-bit packed normal represented exactly as float32
         this.albedoTexture = renderer.device.createTexture({
-            label: "G-buffer albedo texture",
+            label: "G-buffer packed albedo and normal",
             size: [renderer.canvas.width, renderer.canvas.height],
-            format: "rgba8unorm",
+            format: "rgba32float",
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
         });
         this.albedoTextureView = this.albedoTexture.createView();
-
-        // World-space normals require a format that supports negative values
-        this.normalTexture = renderer.device.createTexture({
-            label: "G-buffer normals",
-            size: [renderer.canvas.width, renderer.canvas.height],
-            format: "rgba16float",
-            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
-        });
-        this.normalTextureView = this.normalTexture.createView();
 
 
 
@@ -223,25 +234,46 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
 
 
 
-        // Group 1 of fullscreen fragment shader:
-        // 0: albedo texture
-        // 1: normal texture
-        // 2: depth texture
+        // // Group 1 of fullscreen fragment shader:
+        // // 0: albedo texture
+        // // 1: normal texture
+        // // 2: depth texture
+        // this.gBufferBindGroupLayout = renderer.device.createBindGroupLayout({
+        //     label: "G-buffer texture bind group layout",
+        //     entries: [
+        //         {
+        //             binding: 0,
+        //             visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+        //             texture: { sampleType: "float" }
+        //         },
+        //         {
+        //             binding: 1,
+        //             visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+        //             texture: { sampleType: "unfilterable-float" }
+        //         },
+        //         {
+        //             binding: 2,
+        //             visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+        //             texture: { sampleType: "depth" }
+        //         }
+        //     ]
+        // });
+
+
+        // Extra Credit: one packed color texture and one depth texture
+        // Group 1:
+        // binding 0: packed albedo and normal
+        // binding 1: depth
         this.gBufferBindGroupLayout = renderer.device.createBindGroupLayout({
-            label: "G-buffer texture bind group layout",
+            label: "Packed G-buffer texture bind group layout",
             entries: [
                 {
                     binding: 0,
                     visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
-                    texture: { sampleType: "float" }
-                },
-                {
-                    binding: 1,
-                    visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
                     texture: { sampleType: "unfilterable-float" }
                 },
                 {
-                    binding: 2,
+                    binding: 1,
                     visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
                     texture: { sampleType: "depth" }
                 }
@@ -252,7 +284,7 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
 
 
         this.gBufferBindGroup = renderer.device.createBindGroup({
-            label: "G-buffer texture bind group",
+            label: "Packed G-buffer texture bind group",
             layout: this.gBufferBindGroupLayout,
             entries: [
                 {
@@ -261,10 +293,6 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
                 },
                 {
                     binding: 1,
-                    resource: this.normalTextureView
-                },
-                {
-                    binding: 2,
                     resource: this.depthTextureView
                 }
             ]
@@ -299,8 +327,8 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
                     code: shaders.clusteredDeferredFragSrc
                 }),
                 targets: [
-                    { format: "rgba8unorm" },
-                    { format: "rgba16float" }
+                    // { format: "rgba8unorm" },
+                    { format: "rgba32float" }
                 ]
             },
             primitive: {
@@ -518,12 +546,6 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
             colorAttachments: [
                 {
                     view: this.albedoTextureView,
-                    clearValue: [0, 0, 0, 0],
-                    loadOp: "clear",
-                    storeOp: "store"
-                },
-                {
-                    view: this.normalTextureView,
                     clearValue: [0, 0, 0, 0],
                     loadOp: "clear",
                     storeOp: "store"

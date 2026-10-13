@@ -11,9 +11,9 @@
 
 
 
-@group(1) @binding(0) var albedoTex: texture_2d<f32>;
-@group(1) @binding(1) var normalTex: texture_2d<f32>;
-@group(1) @binding(2) var depthTex: texture_depth_2d;
+// Extra Credit: packed albedo and normal, plus separate depth
+@group(1) @binding(0) var packedBufferTex: texture_2d<f32>;
+@group(1) @binding(1) var depthTex: texture_depth_2d;
 
 
 
@@ -39,8 +39,7 @@ fn main(
 
 
 
-    let diffuseColor = textureLoad(albedoTex, pixel, 0);
-    let normalData = textureLoad(normalTex, pixel, 0);
+    let packedData = textureLoad(packedBufferTex, pixel, 0);
     let depth = textureLoad(depthTex, pixel, 0);
 
 
@@ -51,7 +50,7 @@ fn main(
         return vec4f(0.0, 0.0, 0.0, 0.0);
     }
 
-    let nor = normalize(normalData.xyz);
+    let nor = unpackNormal(packedData.a);
 
    
     // Reconstruct world-space position
@@ -123,7 +122,7 @@ fn main(
     }
 
     // Same final lighting calculation as Naive and Forward+
-    let finalColor = diffuseColor.rgb * totalLightContrib;
+    let finalColor = packedData.rgb * totalLightContrib;
 
     return vec4f(finalColor, 1.0);
 }
