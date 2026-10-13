@@ -83,13 +83,15 @@ The renderer performs three main operations:
 
 #### G-buffer Pass
 
-I created three G-buffer attachments:
+For my original Clustered Deferred implementation, I used two color attachments and a separate depth attachment:
 
 | Attachment | Format | Stored Information |
 |---|---|---|
 | Albedo | `rgba8unorm` | Diffuse texture color |
 | Normals | `rgba16float` | Normalized surface normals |
 | Depth | `depth24plus` | Depth information from the geometry pass |
+
+This was my initial G-buffer layout before the extra-credit optimization described below. The current implementation combines albedo and normals into one color attachment while keeping depth separate.
 
 The G-buffer fragment shader samples the diffuse texture and writes the albedo and normalized surface normal. It does not perform any lighting calculations.
 
@@ -112,6 +114,34 @@ I then loop through the lights assigned to that cluster, accumulate their contri
 This means I do not need to store a separate world-position texture in the G-buffer. Instead, I reconstruct position from the depth buffer during the fullscreen pass.
 
 Unlike Forward+, the lighting calculations are performed after the geometry pass rather than during the original geometry rendering.
+
+### Extra Credit: G-buffer Optimization
+
+I implemented two additional changes to the Clustered Deferred renderer: moving the deferred lighting calculations into a compute shader and reducing the G-buffer to a single color attachment.
+
+#### Compute-Based Deferred Lighting
+
+In the original implementation, the fullscreen fragment shader reads the G-buffer and performs the lighting calculations for each pixel. For the extra credit, I moved those calculations into a compute shader using 8 × 8 workgroups.
+
+Each compute invocation processes one pixel. It reads the stored albedo, normal, and depth, reconstructs the world-space position, and determines which cluster contains the pixel. It then evaluates the lights assigned to that cluster using the same lighting function as the original implementation.
+
+The compute shader writes the final color into an `rgba8unorm` storage texture. I use a separate fullscreen presentation pass to copy that texture to the canvas, but the lighting calculations themselves are performed entirely in the compute shader.
+
+I also kept the original fragment-based lighting path so that I could compare the two implementations.
+
+#### Single-Color G-buffer
+
+My original G-buffer used two color attachments: an `rgba8unorm` texture for albedo and an `rgba16float` texture for normals. For the extra credit, I combined these into a single `rgba16float` color attachment.
+
+The RGB channels store the diffuse color, while the alpha channel stores an octahedrally encoded surface normal. I quantize the encoded normal into 11 bits, using 6 bits for one component and 5 bits for the other. This produces an integer between 0 and 2047, which can be represented exactly in a 16-bit floating-point channel.
+
+During lighting, I decode the stored normal and use it with the albedo and reconstructed world-space position. The depth attachment remains separate, so I still do not need to store world position explicitly.
+
+This reduces the color G-buffer storage from 12 bytes per pixel to 8 bytes per pixel, a reduction of approximately 33.3%. I also tested an intermediate `rgba32float` packed version before switching to `rgba16float`.
+
+The main tradeoff is that the normal is now quantized, so some precision is lost compared with storing the original floating-point normal components. The smaller color attachment also does not guarantee a proportional improvement in rendering time, since performance depends on more than just the amount of G-buffer data stored.
+
+
 
 ### Shared Lighting Calculations
 
@@ -253,6 +283,56 @@ I would not conclude that Clustered Deferred is always faster than Forward+, sin
 What I can conclude from my measurements is that **clustered light selection provided a substantial performance improvement over the Naive approach**, and that **Clustered Deferred scaled better than Forward+ over the higher light counts I tested**.
 
 
+### 5. Extra-Credit G-buffer Optimization Performance
+
+I also benchmarked the changes I made for the G-buffer optimization extra credit. For these tests, I used 500 moving lights, with 30 warmup samples followed by 100 recorded GPU timing samples per configuration.
+
+I tested the original fragment-based Clustered Deferred renderer, then three versions using compute-based lighting and different G-buffer layouts.
+
+| Configuration | Median GPU Time (ms) |
+|---|---:|
+| Original G-buffer, fragment lighting | 7.930 |
+| Original G-buffer, compute lighting | 13.599 |
+| Packed `rgba32float` G-buffer, compute lighting | 13.402 |
+| Packed `rgba16float` G-buffer, compute lighting | **12.648** |
+
+![GPU performance comparison of four Clustered Deferred configurations at 500 lights](benchmarks/graphs/gpu_time_extra_credit.png)
+
+The first result comes from my original renderer benchmarks. The other three results come from the extra-credit measurements. Since these were collected in separate runs, I would not treat the differences as a perfectly controlled comparison.
+
+#### Compute-Based Lighting
+
+Moving the lighting calculations into a compute shader did not improve performance in my measurements. With the original G-buffer, the compute-based version took 13.599 ms, compared with 7.930 ms for the original fragment-based implementation.
+
+One possible reason is that my compute implementation requires an additional storage texture and a fullscreen presentation pass. Although the lighting calculations have moved into compute, I still need to write the lighting results to a texture and read them again to display the final image.
+
+I did not separately measure the compute lighting and presentation passes, so I cannot determine exactly how much each contributes to the additional time.
+
+#### Packed G-buffer
+
+After implementing compute-based lighting, I tested two versions of the packed G-buffer.
+
+The first version used a single `rgba32float` color attachment. This reduced the number of color attachments from two to one, but increased the color G-buffer storage from 12 bytes per pixel to 16 bytes per pixel.
+
+Its median GPU time was 13.402 ms, slightly lower than the 13.599 ms measured with the original G-buffer and compute lighting.
+
+I then switched to `rgba16float` and reduced the packed normal representation to 11 bits. This brought the color G-buffer storage down to 8 bytes per pixel.
+
+The `rgba16float` version measured 12.648 ms, approximately 5.6% lower than the `rgba32float` packed version and 7.0% lower than the original G-buffer with compute lighting.
+
+These results suggest that reducing the G-buffer's storage requirements may help performance in this implementation. However, the differences are based on individual benchmark runs, and I cannot isolate memory bandwidth as the cause without additional measurements.
+
+#### Tradeoffs and Further Improvements
+
+The main benefit of the packed G-buffer is its smaller color-attachment footprint. However, compressing the surface normal introduces quantization error, so the decoded normal is not guaranteed to match the original normal exactly.
+
+The compute-lighting path also remained slower than the original fragment-lighting path, even after G-buffer compression.
+
+One possible next step would be to investigate whether the computed lighting output can be presented with less intermediate work. I could also experiment with different compute workgroup sizes and measure the lighting, G-buffer, and presentation stages separately to identify where most of the GPU time is spent.
+
+For the current implementation, the most consistent improvement I observed was within the compute-lighting versions, where the smaller `rgba16float` G-buffer produced the lowest median GPU time.
+
+
 ## Benchmark Data
 
 I saved the raw GPU timing measurements and generated the performance graphs using a Python plotting script.
@@ -264,6 +344,8 @@ The benchmark files include:
 * `benchmarks/plot_benchmarks.py`: Script used to generate the performance graphs.
 * `benchmarks/graphs/gpu_time_all_renderers.png`: Comparison of all three renderers.
 * `benchmarks/graphs/gpu_time_optimized_renderers.png`: Comparison of Forward+ and Clustered Deferred.
+* `benchmarks/graphs/gpu_time_extra_credit.png`: Comparison of the original Clustered Deferred implementation and three extra-credit configurations at 500 lights.
+* `benchmarks/raw/gpu_clustered_deferred_500_original_gbuffer_compute.csv`, `benchmarks/raw/gpu_clustered_deferred_500_packed_rgba32float_compute.csv`, and `benchmarks/raw/gpu_clustered_deferred_500_packed_rgba16float_compute.csv`: Raw GPU timing measurements for the three extra-credit compute-lighting configurations.
 
 I retained the raw CSV measurements rather than keeping only the final medians. Each selected configuration contains 100 recorded GPU timing samples after the warmup period.
 

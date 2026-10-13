@@ -64,3 +64,48 @@ plt.close(fig)
 print("Generated graphs:")
 print(graphs_dir / "gpu_time_all_renderers.png")
 print(graphs_dir / "gpu_time_optimized_renderers.png")
+
+
+
+
+# Extra-credit comparison at 500 lights
+extra_credit_names = [
+    "Original G-buffer\nFragment lighting",
+    "Original G-buffer\nCompute lighting",
+    "Packed RGBA32Float\nCompute lighting",
+    "Packed RGBA16Float\nCompute lighting",
+]
+
+extra_credit_times = [7.930, 13.599, 13.402, 12.648]
+
+fig, ax = plt.subplots(figsize=(11, 6))
+
+bars = ax.bar(
+    np.arange(len(extra_credit_names)),
+    extra_credit_times,
+    width=0.65,
+)
+
+ax.set_title("Clustered Deferred Extra-Credit Performance (500 Lights)")
+ax.set_xlabel("G-buffer and Lighting Configuration")
+ax.set_ylabel("Median GPU Time (ms)")
+ax.set_xticks(np.arange(len(extra_credit_names)))
+ax.set_xticklabels(extra_credit_names)
+ax.set_ylim(0, max(extra_credit_times) * 1.2)
+ax.grid(axis="y", alpha=0.25)
+ax.set_axisbelow(True)
+
+for bar, value in zip(bars, extra_credit_times):
+    ax.text(
+        bar.get_x() + bar.get_width() / 2,
+        bar.get_height() + 0.15,
+        f"{value:.3f} ms",
+        ha="center",
+        va="bottom",
+    )
+
+fig.tight_layout()
+fig.savefig(graphs_dir / "gpu_time_extra_credit.png", dpi=200)
+plt.close(fig)
+
+print(graphs_dir / "gpu_time_extra_credit.png")
