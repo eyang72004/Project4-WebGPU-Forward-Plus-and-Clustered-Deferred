@@ -48,6 +48,10 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
     // Extra Credit: compute-based deferred lighting
     computeLightingPipeline: GPUComputePipeline;
 
+    directCanvasOutput: boolean;
+    directCanvasComputePipeline?: GPUComputePipeline;
+    directCanvasOutputBindGroupLayout?: GPUBindGroupLayout;
+
 
     computeOutputTexture: GPUTexture;
     computeOutputTextureView: GPUTextureView;
@@ -69,6 +73,12 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
         super(stage);
 
         this.gpuTimer = new GPUTimer();
+
+
+        this.directCanvasOutput = renderer.canvasFormat === "bgra8unorm" && renderer.device.features.has("bgra8unorm-storage");
+
+        // console.log("Direct canvas compute output:", this.directCanvasOutput);
+        // console.log("Canvas format:", renderer.canvasFormat);
 
         // TODO-3: initialize layouts, pipelines, textures, etc. needed for Forward+ here
         // you'll need two pipelines: one for the G-buffer pass and one for the fullscreen pass
@@ -380,6 +390,23 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
         });
 
 
+        if (this.directCanvasOutput) {
+            this.directCanvasOutputBindGroupLayout = renderer.device.createBindGroupLayout({
+                label: "Clustered Deferred direct canvas output layout",
+                entries: [
+                    {
+                        binding: 0,
+                        visibility: GPUShaderStage.COMPUTE,
+                        storageTexture: {
+                            access: "write-only",
+                            format: "bgra8unorm",
+                            viewDimension: "2d"
+                        }
+                    }
+                ]
+            });
+        }
+
 
         // Extra credit: writable lighting output for the compute pass
         this.computeOutputBindGroupLayout = renderer.device.createBindGroupLayout({
@@ -435,6 +462,28 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
                 entryPoint: "main"
             }
         });
+
+
+        if (this.directCanvasOutput) {
+            this.directCanvasComputePipeline = renderer.device.createComputePipeline({
+                label: "Clustered Deferred direct canvas compute pipeline",
+                layout: renderer.device.createPipelineLayout({
+                    label: "Clustered Deferred direct canvas compute pipeline layout",
+                    bindGroupLayouts: [
+                        this.fullscreenSceneBindGroupLayout,
+                        this.gBufferBindGroupLayout,
+                        this.directCanvasOutputBindGroupLayout!
+                    ]
+                }),
+                compute: {
+                    module: renderer.device.createShaderModule({
+                        label: "Clustered Deferred direct canvas compute shader",
+                        code: shaders.getClusteredDeferredLightingComputeSrc("bgra8unorm")
+                    }),
+                    entryPoint: "main"
+                }
+            });
+        }
 
 
         // Extra Credit: present compute lighting results to the canvas.
@@ -583,18 +632,56 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
         // Extra Credit: compute-based deferred lighting
         const useComputeLighting = true;
 
+        const canvasTextureView = renderer.context.getCurrentTexture().createView();
+
+        const directCanvasBindGroup = this.directCanvasOutput
+            ? renderer.device.createBindGroup({
+                label: "Clustered Deferred direct canvas output bind group",
+                layout: this.directCanvasOutputBindGroupLayout!,
+                entries: [
+                    {
+                        binding: 0,
+                        resource: canvasTextureView
+                    }
+                ]
+            })
+            : undefined;
+
         if (useComputeLighting) {
             const computePass = encoder.beginComputePass({
-                label: "Clustered Deferred compute lighting pass"
+                label: "Clustered Deferred compute lighting pass",
+                timestampWrites: measureThisFrame && this.directCanvasOutput
+                    ? {
+                        querySet: this.gpuTimer.querySet,
+                        endOfPassWriteIndex: 1
+                    }
+                    : undefined
             });
 
 
 
 
-            computePass.setPipeline(this.computeLightingPipeline);
+            // computePass.setPipeline(this.computeLightingPipeline);
+            // computePass.setBindGroup(0, this.fullscreenSceneBindGroup);
+            // computePass.setBindGroup(1, this.gBufferBindGroup);
+            // computePass.setBindGroup(2, this.computeOutputBindGroup);
+
+
+            computePass.setPipeline(
+                this.directCanvasOutput
+                    ? this.directCanvasComputePipeline!
+                    : this.computeLightingPipeline
+            );
+
             computePass.setBindGroup(0, this.fullscreenSceneBindGroup);
             computePass.setBindGroup(1, this.gBufferBindGroup);
-            computePass.setBindGroup(2, this.computeOutputBindGroup);
+
+            computePass.setBindGroup(
+                2,
+                this.directCanvasOutput
+                    ? directCanvasBindGroup!
+                    : this.computeOutputBindGroup
+            );
 
 
 
@@ -614,7 +701,9 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
         // Pass 3: Fullscreen lighting
 
 
-        const canvasTextureView = renderer.context.getCurrentTexture().createView();
+    if (!useComputeLighting || !this.directCanvasOutput) {
+
+        // const canvasTextureView = renderer.context.getCurrentTexture().createView();
 
         const fullscreenPass = encoder.beginRenderPass({
             label: "Clustered Deferred fullscreen lighting pass",
@@ -661,6 +750,7 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
 
 
         fullscreenPass.end();
+    }
 
         if (measureThisFrame) {
             this.gpuTimer.resolve(encoder);

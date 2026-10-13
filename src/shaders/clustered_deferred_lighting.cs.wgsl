@@ -21,7 +21,7 @@ struct ScreenUniforms {
 
 
 
-@group(2) @binding(0) var outputTex: texture_storage_2d<rgba8unorm, write>;
+@group(2) @binding(0) var outputTex: texture_storage_2d<${outputTextureFormat}, write>;
 
 
 

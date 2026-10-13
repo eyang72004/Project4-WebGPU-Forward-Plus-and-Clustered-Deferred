@@ -43,7 +43,10 @@ export const constants = {
     clusterCountZ: 24,
 
     maxLightsPerCluster: 128,
-    clusteringWorkgroupSize: 64
+    clusteringWorkgroupSize: 64,
+
+    // Storage texture format for compute-based deferred lighting
+    outputTextureFormat: "rgba8unorm"
 };
 
 // =================================
@@ -71,7 +74,21 @@ export const forwardPlusFragSrc: string = processShaderRaw(forwardPlusFragRaw);
 
 export const clusteredDeferredFragSrc: string = processShaderRaw(clusteredDeferredFragRaw);
 export const clusteredDeferredPresentFragSrc: string = processShaderRaw(clusteredDeferredPresentFragRaw);
-export const clusteredDeferredLightingComputeSrc: string = processShaderRaw(clusteredDeferredLightingComputeRaw);
+// export const clusteredDeferredLightingComputeSrc: string = processShaderRaw(clusteredDeferredLightingComputeRaw);
+
+export function getClusteredDeferredLightingComputeSrc(
+    outputTextureFormat: "rgba8unorm" | "bgra8unorm"
+): string {
+    const raw = clusteredDeferredLightingComputeRaw.replace(
+        "${outputTextureFormat}",
+        outputTextureFormat
+    );
+
+    return processShaderRaw(raw);
+}
+
+export const clusteredDeferredLightingComputeSrc: string = getClusteredDeferredLightingComputeSrc("rgba8unorm");
+
 export const clusteredDeferredFullscreenVertSrc: string = processShaderRaw(clusteredDeferredFullscreenVertRaw);
 export const clusteredDeferredFullscreenFragSrc: string = processShaderRaw(clusteredDeferredFullscreenFragRaw);
 

@@ -73,13 +73,13 @@ The clustering pass introduces additional work before rendering, but I expected 
 
 ### Clustered Deferred Shading
 
-For Clustered Deferred, I reused the light-clustering implementation from Forward+ but separated geometry rendering and lighting into two different render passes.
+For Clustered Deferred, I reused the light-clustering implementation from Forward+ but separated geometry rendering and lighting into two stages. My original implementation used a G-buffer render pass followed by a fullscreen lighting render pass. I later replaced the fullscreen lighting stage with a compute shader for the extra credit, as described below.
 
 The renderer performs three main operations:
 
 1. Run the light-clustering compute shader.
 2. Render the scene geometry into the G-buffer.
-3. Perform lighting in a fullscreen pass using the G-buffer and cluster light lists.
+3. Perform lighting using the G-buffer and cluster light lists, either through the original fullscreen fragment shader or through the extra-credit compute shader.
 
 #### G-buffer Pass
 
@@ -101,7 +101,7 @@ The depth information is written through the render pass's depth attachment rath
 
 #### Fullscreen Lighting Pass
 
-After the G-buffer pass, I render a fullscreen triangle and perform the lighting calculations using the stored G-buffer information.
+In my original Clustered Deferred implementation, I rendered a fullscreen triangle after the G-buffer pass and performed the lighting calculations using the stored G-buffer information. I kept this fragment-based lighting path in the code, although the extra-credit compute shader is now used by default.
 
 For each pixel, I read the albedo, normal, and depth textures. If the depth is 1.0, I treat the pixel as background and skip the lighting calculation.
 
@@ -125,7 +125,7 @@ In the original implementation, the fullscreen fragment shader reads the G-buffe
 
 Each compute invocation processes one pixel. It reads the stored albedo, normal, and depth, reconstructs the world-space position, and determines which cluster contains the pixel. It then evaluates the lights assigned to that cluster using the same lighting function as the original implementation.
 
-The compute shader writes the final color into an `rgba8unorm` storage texture. I use a separate fullscreen presentation pass to copy that texture to the canvas, but the lighting calculations themselves are performed entirely in the compute shader.
+On devices supporting `bgra8unorm-storage`, the compute shader writes the final color directly to the canvas's `bgra8unorm` storage texture. This removes the separate fullscreen vertex and fragment presentation pass. I request the optional GPU feature when it is available and configure the canvas with storage-binding usage. For devices without this support, I kept the earlier implementation, which writes to an intermediate `rgba8unorm` storage texture and uses a fullscreen presentation pass to display the result.
 
 I also kept the original fragment-based lighting path so that I could compare the two implementations.
 
@@ -174,7 +174,7 @@ The timing boundaries differ slightly between the three implementations because 
 
 * **Naive:** I measured the geometry rendering pass.
 * **Forward+:** I measured the light-clustering compute pass and the subsequent forward rendering pass.
-* **Clustered Deferred:** I measured the light-clustering compute pass, G-buffer pass, and fullscreen lighting pass.
+* **Clustered Deferred:** For the original fragment-based benchmarks, I measured the light-clustering compute pass, G-buffer pass, and fullscreen lighting pass. For the direct-canvas compute implementation, I measured the light-clustering compute pass, G-buffer pass, and compute lighting pass, with the final timestamp recorded at the end of the compute pass.
 
 This means the Forward+ and Clustered Deferred measurements include the additional passes required by their respective implementations.
 
@@ -322,9 +322,23 @@ The first result comes from my original renderer benchmarks. The other three res
 
 Moving the lighting calculations into a compute shader did not improve performance in my measurements. With the original G-buffer, the compute-based version took 13.599 ms, compared with 7.930 ms for the original fragment-based implementation.
 
-One possible reason is that my compute implementation requires an additional storage texture and a fullscreen presentation pass. Although the lighting calculations have moved into compute, I still need to write the lighting results to a texture and read them again to display the final image.
+One possible reason for the slower compute-based results is that the versions I benchmarked at this stage used an intermediate storage texture and a separate fullscreen presentation pass. Although the lighting calculations were performed in compute, the results still had to be written to a texture and read again for presentation. I later implemented direct-canvas compute output on supported hardware, which removes that additional presentation pass.
 
 I did not separately measure the compute lighting and presentation passes, so I cannot determine exactly how much each contributes to the additional time.
+
+
+#### Direct-Canvas Compute Output
+
+After implementing direct-canvas compute output, I ran two additional benchmarks with 500 moving lights. Each run used 30 warmup samples followed by 100 recorded GPU timing samples.
+
+| Run | Median GPU Time (ms) |
+|---|---:|
+| Direct-canvas compute, Run 1 | 12.059 |
+| Direct-canvas compute, Run 2 | 7.635 |
+
+The results varied substantially between the two runs, even though both used the same nominal light count and rendering implementation. I cannot determine the cause of this variation from the timing measurements alone.
+
+The direct-canvas implementation removes the additional fullscreen presentation pass on supported hardware, but these measurements are not sufficient to establish a consistent performance improvement over the earlier compute or fragment-based implementations.
 
 #### Packed G-buffer
 
@@ -346,9 +360,9 @@ The main benefit of the packed G-buffer is its smaller color-attachment footprin
 
 The compute-lighting path also remained slower than the original fragment-lighting path, even after G-buffer compression.
 
-One possible next step would be to investigate whether the computed lighting output can be presented with less intermediate work. I could also experiment with different compute workgroup sizes and measure the lighting, G-buffer, and presentation stages separately to identify where most of the GPU time is spent.
+I subsequently implemented direct-canvas compute output on supported hardware, removing the intermediate texture and fullscreen presentation pass from that path. Further work could include testing different compute workgroup sizes and measuring the clustering, G-buffer, and lighting stages separately to better understand where GPU time is spent.
 
-For the current implementation, the most consistent improvement I observed was within the compute-lighting versions, where the smaller `rgba16float` G-buffer produced the lowest median GPU time.
+Among the earlier compute-lighting configurations I benchmarked, the packed `rgba16float` G-buffer produced the lowest median GPU time. The later direct-canvas measurements varied substantially between runs, so I cannot draw a firm conclusion about its performance relative to those earlier configurations.
 
 
 ## Benchmark Data
