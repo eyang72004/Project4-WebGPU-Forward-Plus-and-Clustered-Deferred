@@ -101,7 +101,7 @@ The depth information is written through the render pass's depth attachment rath
 
 #### Fullscreen Lighting Pass
 
-In my original Clustered Deferred implementation, I rendered a fullscreen triangle after the G-buffer pass and performed the lighting calculations using the stored G-buffer information. I kept this fragment-based lighting path in the code, although the extra-credit compute shader is now used by default.
+In my original Clustered Deferred implementation, I rendered a fullscreen triangle after the G-buffer pass and performed the lighting calculations using the stored G-buffer information. The fragment-based lighting shader is still in the code, but it is currently disabled because `useComputeLighting` is hardcoded to `true`. It also now reads the packed G-buffer, so the original 7.930 ms fragment-lighting benchmark was measured using the earlier two-color-attachment implementation rather than the current version.
 
 For each pixel, I read the albedo, normal, and depth textures. If the depth is 1.0, I treat the pixel as background and skip the lighting calculation.
 
@@ -125,9 +125,9 @@ In the original implementation, the fullscreen fragment shader reads the G-buffe
 
 Each compute invocation processes one pixel. It reads the stored albedo, normal, and depth, reconstructs the world-space position, and determines which cluster contains the pixel. It then evaluates the lights assigned to that cluster using the same lighting function as the original implementation.
 
-On devices supporting `bgra8unorm-storage`, the compute shader writes the final color directly to the canvas's `bgra8unorm` storage texture. This removes the separate fullscreen vertex and fragment presentation pass. I request the optional GPU feature when it is available and configure the canvas with storage-binding usage. For devices without this support, I kept the earlier implementation, which writes to an intermediate `rgba8unorm` storage texture and uses a fullscreen presentation pass to display the result.
+When the device supports `bgra8unorm-storage` and the browser's preferred canvas format is `bgra8unorm`, the compute shader writes the final color directly to the canvas's storage texture. This removes the separate fullscreen vertex and fragment presentation pass. I request the optional GPU feature when it is available and configure the canvas with storage-binding usage when both conditions are met. Otherwise, the compute shader writes to an intermediate `rgba8unorm` storage texture, and a fullscreen presentation pass displays the result.
 
-I also kept the original fragment-based lighting path so that I could compare the two implementations.
+I also retained the fragment-based lighting shader in the code, although the compute-lighting path is currently hardcoded to run instead. The retained fragment shader now reads the packed G-buffer, while my original fragment-lighting benchmarks used the earlier two-color-attachment G-buffer.
 
 #### Single-Color G-buffer
 
@@ -230,6 +230,8 @@ At 1000 lights, Naive measured **405.733 ms**, compared with **27.329 ms** for F
 
 The Naive measurements also do not scale perfectly proportionally with the light count. For example, increasing from 500 to 1000 lights did not double the median GPU time. I have kept the measured values rather than assuming a particular scaling relationship from the shader's loop structure alone.
 
+One limitation of my clustered implementations is that each cluster can store at most 128 light indices. If more than 128 lights intersect a cluster, the clustering shader stops adding additional lights, so some lights may be omitted from shading. I did not measure whether any clusters exceeded this limit during benchmarking, so this is worth keeping in mind when interpreting the results at higher light counts, particularly at 1000 lights.
+
 ### 2. Forward+ vs. Clustered Deferred
 
 I also compared Forward+ and Clustered Deferred separately because the much larger Naive timings make the differences between the two optimized implementations harder to see on the first graph.
@@ -261,6 +263,8 @@ I think this crossover is consistent with the additional work required by deferr
 Clustered Deferred has to create and write the G-buffer, then read those textures during the fullscreen lighting pass. At smaller light counts, that extra work can offset some of the benefit of separating geometry rendering from lighting.
 
 As the light count increases, however, the cost of lighting becomes more important. Clustered Deferred performs lighting in a separate fullscreen pass, while Forward+ performs lighting during geometry rendering.
+
+Another difference is overdraw. In Forward+, lighting calculations can be performed for fragments that are later hidden by geometry closer to the camera, although depth testing can avoid some of this work. In Clustered Deferred, lighting is performed once per visible pixel after the G-buffer pass, so it avoids repeating the lighting calculations for overlapping geometry. This could also contribute to the performance difference, although I did not measure overdraw separately.
 
 This could help explain why Clustered Deferred performs better at the higher light counts in my measurements.
 
@@ -358,7 +362,7 @@ These results suggest that reducing the G-buffer's storage requirements may help
 
 The main benefit of the packed G-buffer is its smaller color-attachment footprint. However, compressing the surface normal introduces quantization error, so the decoded normal is not guaranteed to match the original normal exactly.
 
-The compute-lighting path also remained slower than the original fragment-lighting path, even after G-buffer compression.
+The earlier compute-lighting versions that used an intermediate storage texture remained slower than the original fragment-lighting implementation, even after G-buffer compression. The later direct-canvas compute measurements varied between runs, so I cannot conclude that either approach was consistently faster.
 
 I subsequently implemented direct-canvas compute output on supported hardware, removing the intermediate texture and fullscreen presentation pass from that path. Further work could include testing different compute workgroup sizes and measuring the clustering, G-buffer, and lighting stages separately to better understand where GPU time is spent.
 
@@ -378,6 +382,7 @@ The benchmark files include:
 * `benchmarks/graphs/gpu_time_optimized_renderers.png`: Comparison of Forward+ and Clustered Deferred.
 * `benchmarks/graphs/gpu_time_extra_credit.png`: Comparison of the original Clustered Deferred implementation and three extra-credit configurations at 500 lights.
 * `benchmarks/raw/gpu_clustered_deferred_500_original_gbuffer_compute.csv`, `benchmarks/raw/gpu_clustered_deferred_500_packed_rgba32float_compute.csv`, and `benchmarks/raw/gpu_clustered_deferred_500_packed_rgba16float_compute.csv`: Raw GPU timing measurements for the three extra-credit compute-lighting configurations.
+* `benchmarks/raw/gpu_clustered_deferred_500_direct_canvas_run1.csv` and `benchmarks/raw/gpu_clustered_deferred_500_direct_canvas_run2.csv`: Raw GPU timing measurements for the two direct-canvas compute-lighting benchmarks at 500 lights. Their median GPU times were 12.059 ms and 7.635 ms, respectively, with 100 recorded samples per run.
 
 I retained the raw CSV measurements rather than keeping only the final medians. Each selected configuration contains 100 recorded GPU timing samples after the warmup period.
 
