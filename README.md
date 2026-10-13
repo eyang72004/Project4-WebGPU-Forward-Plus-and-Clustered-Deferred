@@ -266,6 +266,10 @@ As the light count increases, however, the cost of lighting becomes more importa
 
 Another difference is overdraw. In Forward+, lighting calculations can be performed for fragments that are later hidden by geometry closer to the camera, although depth testing can avoid some of this work. In Clustered Deferred, lighting is performed once per visible pixel after the G-buffer pass, so it avoids repeating the lighting calculations for overlapping geometry. This could also contribute to the performance difference, although I did not measure overdraw separately.
 
+For Forward+, the best case is a scene where relatively few lights overlap each cluster and depth testing avoids unnecessary fragment shading. In that situation, the renderer can benefit from clustered light selection without needing a separate G-buffer and lighting pass. A worse case is a scene with many overlapping lights and substantial overdraw, where lighting calculations can become more expensive.
+
+For Clustered Deferred, the best case is a scene with many lights and overlapping geometry, where performing lighting once per visible pixel can offset the additional cost of writing and reading the G-buffer. A worse case is a scene with relatively few lights, where the G-buffer and separate lighting pass introduce overhead without providing as much benefit. These are expected tradeoffs based on the rendering approaches, rather than scenarios I separately benchmarked.
+
 This could help explain why Clustered Deferred performs better at the higher light counts in my measurements.
 
 I did not separately time the clustering, G-buffer, and fullscreen lighting stages, so I cannot determine exactly how much time each stage contributes to the total. I would therefore treat this as an explanation consistent with the implementation and results rather than a directly measured breakdown.
