@@ -182,6 +182,22 @@ I collected the measurements on the laptop listed at the beginning of this READM
 
 I also recorded the intended benchmark conditions in `benchmarks/benchmark_config.json`. However, the earlier raw CSV files do not individually record the camera position and resolution used during each run, so I cannot independently verify those settings from the CSV files alone.
 
+
+For the 500-light baseline results, I used the recordings with `(1)` in their filenames for all three renderers. These are the recordings represented in `benchmark_summary.csv` and the performance tables below.
+
+I also retained earlier recordings of the same nominal 500-light configurations. Their median GPU times differed from the selected runs:
+
+| Renderer | Reported Run (ms) | Alternate Run (ms) |
+|---|---:|---:|
+| Naive | 326.238 | 203.227 |
+| Forward+ | 14.680 | 22.643 |
+| Clustered Deferred | 7.930 | 7.995 |
+
+The differences were especially noticeable for Naive and Forward+. Because the raw files do not record every test condition, I cannot determine whether these differences came from changes in the rendering environment, GPU behavior, or other factors. I therefore kept the original reported measurements but would not treat the differences between closely performing configurations as conclusive.
+
+
+
+
 ### 1. Effect of Increasing the Number of Lights
 
 I compared the median GPU execution time of all three renderers as I increased the number of active lights.
@@ -225,6 +241,8 @@ The results were interesting because Clustered Deferred was not faster at every 
 At 50 lights, Forward+ measured **4.063 ms**, compared with **4.325 ms** for Clustered Deferred.
 
 At 100 lights, Forward+ was still slightly faster, measuring **4.719 ms** compared with **4.850 ms**.
+
+The differences at 50 and 100 lights were small, so I would not take these individual benchmark runs as conclusive evidence that Forward+ is consistently faster at lower light counts. The larger differences at 250, 500, and 1000 lights provide stronger evidence of the performance advantage I observed for Clustered Deferred in this scene.
 
 However, the relationship changed at 250 lights. Forward+ measured **8.258 ms**, while Clustered Deferred measured **5.964 ms**.
 
