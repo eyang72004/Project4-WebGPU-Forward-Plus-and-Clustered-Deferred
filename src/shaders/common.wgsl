@@ -92,24 +92,23 @@ fn octDecodeNormal(encoded: vec2f) -> vec3f {
 
 
 
+// Extra Credit: 11-bit octahedral normal packed into float16 alpha
+// 6 bits for X and 5 bits for Y; packed integers are exactly representable
 fn packNormal(normal: vec3f) -> f32 {
     let encoded = octEncodeNormal(normal);
 
-    let x = u32(round(clamp(encoded.x, 0.0, 1.0) * 255.0));
-    let y = u32(round(clamp(encoded.y, 0.0, 1.0) * 255.0));
+    let x = u32(round(clamp(encoded.x, 0.0, 1.0) * 63.0));
+    let y = u32(round(clamp(encoded.y, 0.0, 1.0) * 31.0));
 
-    return f32(x | (y << 8u));
+    return f32(x | (y << 6u));
 }
-
-
 
 
 fn unpackNormal(packed: f32) -> vec3f {
     let bits = u32(round(packed));
 
-
-    let x = f32(bits & 255u) / 255.0;
-    let y = f32((bits >> 8u) & 255u) / 255.0;
+    let x = f32(bits & 63u) / 63.0;
+    let y = f32((bits >> 6u) & 31u) / 31.0;
 
     return octDecodeNormal(vec2f(x, y));
 }

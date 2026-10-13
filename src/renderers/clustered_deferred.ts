@@ -106,12 +106,13 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
         // this.normalTextureView = this.normalTexture.createView();
 
 
-        // Extra Credit: single-color G-buffer
-        // RGB stores albedo; alpha stores octahedrally encoded, 16-bit packed normal represented exactly as float32
+        // Extra Credit: compact single-color G-buffer
+        // RGB stores albedo; alpha stores an 11-bit octahedral normal (6 bits X, 5 bits Y)
+        // The packed integer fits exactly in the rgba16float alpha channel
         this.albedoTexture = renderer.device.createTexture({
             label: "G-buffer packed albedo and normal",
             size: [renderer.canvas.width, renderer.canvas.height],
-            format: "rgba32float",
+            format: "rgba16float",
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
         });
         this.albedoTextureView = this.albedoTexture.createView();
@@ -328,7 +329,7 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
                 }),
                 targets: [
                     // { format: "rgba8unorm" },
-                    { format: "rgba32float" }
+                    { format: "rgba16float" }
                 ]
             },
             primitive: {
