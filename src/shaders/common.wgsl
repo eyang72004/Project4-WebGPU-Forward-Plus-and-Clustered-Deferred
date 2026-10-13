@@ -82,7 +82,8 @@ fn octDecodeNormal(encoded: vec2f) -> vec3f {
     );
 
     if (normal.z < 0.0) {
-        normal.xy = (vec2f(1.0) - abs(normal.yx)) * select(vec2f(-1.0), vec2f(1.0), normal.xy >= vec2f(0.0));
+        let folded = (vec2f(1.0) - abs(normal.yx)) * select(vec2f(-1.0), vec2f(1.0), normal.xy >= vec2f(0.0));
+        normal = vec3f(folded, normal.z);
     }
 
 
