@@ -45,6 +45,23 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
     fullscreenPipeline: GPURenderPipeline;
 
 
+    // Extra Credit: compute-based deferred lighting
+    computeLightingPipeline: GPUComputePipeline;
+
+
+    computeOutputTexture: GPUTexture;
+    computeOutputTextureView: GPUTextureView;
+
+
+    computeOutputBindGroupLayout: GPUBindGroupLayout;
+    computeOutputBindGroup: GPUBindGroup;
+
+
+    presentationPipeline: GPURenderPipeline;
+    presentationBindGroupLayout: GPUBindGroupLayout;
+    presentationBindGroup: GPUBindGroup;
+
+
     gpuTimer: GPUTimer;
 
 
@@ -100,6 +117,17 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
         });
         this.depthTextureView = this.depthTexture.createView();
 
+        // Extra Credit: compute lighting output
+        // Compute shader writes here; presentation pass reads from it
+        this.computeOutputTexture = renderer.device.createTexture({
+            label: "Clustered Deferred compute lighting output",
+            size: [renderer.canvas.width, renderer.canvas.height],
+            format: "rgba8unorm",
+            usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING
+        })
+
+        this.computeOutputTextureView = this.computeOutputTexture.createView();
+
 
 
 
@@ -147,22 +175,22 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
             entries: [
                 {
                     binding: 0,
-                    visibility: GPUShaderStage.FRAGMENT,
+                    visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
                     buffer: { type: "uniform" }
                 },
                 {
                     binding: 1,
-                    visibility: GPUShaderStage.FRAGMENT,
+                    visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
                     buffer: { type: "read-only-storage" }
                 },
                 {
                     binding: 2,
-                    visibility: GPUShaderStage.FRAGMENT,
+                    visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
                     buffer: { type: "read-only-storage" }
                 },
                 {
                     binding: 3,
-                    visibility: GPUShaderStage.FRAGMENT,
+                    visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
                     buffer: { type: "uniform" }
                 }
             ]
@@ -204,17 +232,17 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
             entries: [
                 {
                     binding: 0,
-                    visibility: GPUShaderStage.FRAGMENT,
+                    visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
                     texture: { sampleType: "float" }
                 },
                 {
                     binding: 1,
-                    visibility: GPUShaderStage.FRAGMENT,
+                    visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
                     texture: { sampleType: "unfilterable-float" }
                 },
                 {
                     binding: 2,
-                    visibility: GPUShaderStage.FRAGMENT,
+                    visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
                     texture: { sampleType: "depth" }
                 }
             ]
@@ -321,6 +349,124 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
                 topology: "triangle-list",
             }
         });
+
+
+
+        // Extra credit: writable lighting output for the compute pass
+        this.computeOutputBindGroupLayout = renderer.device.createBindGroupLayout({
+            label: "Clustered Deferred compute output layout",
+            entries: [
+                {
+                    binding: 0,
+                    visibility: GPUShaderStage.COMPUTE,
+                    storageTexture: {
+                        access: "write-only",
+                        format: "rgba8unorm",
+                        viewDimension: "2d"
+                    }
+                }
+            ]
+        });
+
+
+
+
+
+
+        this.computeOutputBindGroup = renderer.device.createBindGroup({
+            label: "Clustered Deferred compute output bind group",
+            layout: this.computeOutputBindGroupLayout,
+            entries: [
+                {
+                    binding: 0,
+                    resource: this.computeOutputTextureView
+                }
+            ]
+        });
+
+
+
+
+
+        this.computeLightingPipeline = renderer.device.createComputePipeline({
+            label: "Clustered Deferred compute lighting pipeline",
+            layout: renderer.device.createPipelineLayout({
+                label: "Clustered Deferred compute lighting pipeline layout",
+                bindGroupLayouts: [
+                    this.fullscreenSceneBindGroupLayout,
+                    this.gBufferBindGroupLayout,
+                    this.computeOutputBindGroupLayout
+                ]
+            }),
+            compute: {
+                module: renderer.device.createShaderModule({
+                    label: "Clustered Deferred compute lighting shader",
+                    code: shaders.clusteredDeferredLightingComputeSrc
+                }),
+                entryPoint: "main"
+            }
+        });
+
+
+        // Extra Credit: present compute lighting results to the canvas.
+        this.presentationBindGroupLayout = renderer.device.createBindGroupLayout({
+            label: "Clustered Deferred presentation layout",
+            entries: [
+                {
+                    binding: 0,
+                    visibility: GPUShaderStage.FRAGMENT,
+                    texture: { sampleType: "float" }
+                }
+            ]
+        });
+
+
+
+        this.presentationBindGroup = renderer.device.createBindGroup({
+            label: "Clustered Deferred presentation bind group",
+            layout: this.presentationBindGroupLayout,
+            entries: [
+                {
+                    binding: 0,
+                    resource: this.computeOutputTextureView
+                }
+            ]
+        });
+
+
+
+
+
+
+        this.presentationPipeline = renderer.device.createRenderPipeline({
+            label: "Clustered Deferred compute presentation pipeline",
+            layout: renderer.device.createPipelineLayout({
+                label: "Clustered Deferred presentation pipeline layout",
+                bindGroupLayouts: [
+                    this.presentationBindGroupLayout
+                ]
+            }),
+            vertex: {
+                module: renderer.device.createShaderModule({
+                    label: "Clustered Deferred presentation vertex shader",
+                    code: shaders.clusteredDeferredFullscreenVertSrc
+                }),
+                entryPoint: "main"
+            },
+            fragment: {
+                module: renderer.device.createShaderModule({
+                    label: "Clustered Deferred presentation fragment shader",
+                    code: shaders.clusteredDeferredPresentFragSrc
+                }),
+                entryPoint: "main",
+                targets: [
+                    { format: renderer.canvasFormat }
+                ]
+            },
+            primitive: {
+                topology: "triangle-list"
+            }
+        });
     }
 
 
@@ -411,6 +557,35 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
         gBufferPass.end();
 
 
+        // Extra Credit: compute-based deferred lighting
+        const useComputeLighting = true;
+
+        if (useComputeLighting) {
+            const computePass = encoder.beginComputePass({
+                label: "Clustered Deferred compute lighting pass"
+            });
+
+
+
+
+            computePass.setPipeline(this.computeLightingPipeline);
+            computePass.setBindGroup(0, this.fullscreenSceneBindGroup);
+            computePass.setBindGroup(1, this.gBufferBindGroup);
+            computePass.setBindGroup(2, this.computeOutputBindGroup);
+
+
+
+            computePass.dispatchWorkgroups(
+                Math.ceil(renderer.canvas.width / 8),
+                Math.ceil(renderer.canvas.height / 8)
+            );
+
+
+
+            computePass.end();
+        }
+
+
 
 
         // Pass 3: Fullscreen lighting
@@ -434,11 +609,29 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
             ]
         });
 
-        fullscreenPass.setPipeline(this.fullscreenPipeline);
+        if (useComputeLighting) {
 
-        fullscreenPass.setBindGroup(0, this.fullscreenSceneBindGroup);
 
-        fullscreenPass.setBindGroup(1, this.gBufferBindGroup);
+        // Only display the lighting texture; no lighting calculations here
+        fullscreenPass.setPipeline(this.presentationPipeline);
+
+
+        fullscreenPass.setBindGroup(0, this.presentationBindGroup);
+
+
+        } else {
+
+
+            // Preserve the original fragment-based deferred lighting path
+
+            fullscreenPass.setPipeline(this.fullscreenPipeline);
+
+
+            fullscreenPass.setBindGroup(0, this.fullscreenSceneBindGroup);
+
+
+            fullscreenPass.setBindGroup(1, this.gBufferBindGroup);
+        }
 
         // Fullscreen triangle generated by vertex_index
         fullscreenPass.draw(3);
